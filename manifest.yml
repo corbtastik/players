@@ -1,0 +1,6 @@
+---
+applications:
+- name: players
+  memory: 512M
+  host: players
+  path: target/players-0.0.1-SNAPSHOT.jar
