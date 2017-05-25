@@ -4,13 +4,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.*;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include;
 
@@ -23,7 +22,7 @@ class Player {
     private String firstGame;
     private String lastGame;
 
-    public Player(String id,
+    Player(String id,
         String firstName, String lastName,
         String bats, String fields,
         String firstGame, String lastGame) {
@@ -74,7 +73,9 @@ class Response {
     @JsonProperty
     private Object data;
 
-    public Response(Object data) {
+    Response() { }
+
+    Response(Object data) {
         this.data = data;
         this.meta = new HashMap<>();
     }
@@ -94,44 +95,77 @@ class Response {
     public Object getData() {
         return data;
     }
+
+    Response meta(String key, Object value) {
+        this.meta.put(key, value);
+        return this;
+    }
+
+    boolean isEmpty() {
+        return data == null && meta == null;
+    }
 }
 
 class PlayersDB {
-    public static Map<String, Player> getAll() {
+    static Map<String, Player> getAll() {
 
         Map<String, Player> players = new HashMap<>();
-        players.put("babe", new Player("ruthba01",
+        players.put("ruthba01", new Player("ruthba01",
                 "George Herman", "Ruth",
                 "Left", "Left",
                 "July 11, 1914, for the Boston Red Sox",
                 "May 30, 1935, for the Boston Braves"));
-        players.put("jackson", new Player("jacksjo01",
+        players.put("jacksjo01", new Player("jacksjo01",
                 "Shoeless Joe", "Jackson",
                 "Left", "Right",
                 "August 25, 1908, for the Philadelphia Athletics",
                 "September 27, 1920, for the Chicago White Sox"));
-        players.put("rose", new Player("rosepe01",
+        players.put("rosepe01", new Player("rosepe01",
                 "Pete", "Rose",
                 "Switch", "Right",
                 "April 8, 1963, for the Cincinnati Reds",
                 "August 17, 1986, for the Cincinnati Reds"));
-        players.put("oddibe", new Player("mcdowod01",
+        players.put("mcdowod01", new Player("mcdowod01",
                 "Oddibe", "McDowell",
                 "Left", "Left",
                 "May 19, 1985, for the Texas Rangers",
                 "August 10, 1994, for the Texas Rangers"));
-        players.put("eddie", new Player("gaedeed01",
+        players.put("gaedeed01", new Player("gaedeed01",
                 "Eddie", "Gaedel",
                 "Right", "Left",
                 "August 19, 1951, for the St. Louis Browns",
                 "August 19, 1951, for the St. Louis Browns"));
-        players.put("ty", new Player("cobbty01",
+        players.put("cobbty01", new Player("cobbty01",
                 "Ty", "Cobb",
                 "Left", "Right",
                 "August 30, 1905, for the Detroit Tigers",
                 "September 11, 1928, for the Philadelphia Athletics"));
+        players.put("rauchjo01", new Player("rauchjo01",
+                "Jon", "Rauch",
+                "Right", "Right",
+                "April 2, 2002, for the Chicago White Sox",
+                "May 17, 2013, for the Miami Marlins"));
+        players.put("bellbu01", new Player("bellbu01",
+                "Buddy", "Bell",
+                "Right", "Right",
+                "April 15, 1972, for the Cleveland Indians",
+                "June 17, 1989, for the Texas Rangers"));
 
         return players;
+    }
+
+    static void add(String playerId) {
+        // TODO implement this
+        System.out.println("TODO implement add(playerId)");
+    }
+
+    static void remove(String playerId) {
+        // TODO implement this
+        System.out.println("TODO implement remove(playerId)");
+    }
+
+    static int size() {
+        return getAll().size();
     }
 }
 
@@ -141,18 +175,69 @@ public class PlayerController {
     @Value("${server.port}")
     private Integer port;
 
-    @RequestMapping("/player/{id}")
-    public Response getPlayer(@PathVariable String id) throws NotFoundException {
+    private Random randomizer = new Random();
 
-        Player player = lookupPlayer(id);
+    @RequestMapping("/player/{playerId}")
+    public Response getPlayer(@PathVariable String playerId) throws NotFoundException {
+        Player player = lookupPlayer(playerId);
+        return newResponse(player);
+    }
 
-        if(port != null) {
-            Response response = new Response(player);
-            response.add("port", port);
-            return response;
+    @SuppressWarnings("unchecked")
+    @RequestMapping("/players/random")
+    public Response getRandomPlayer() {
+        Integer i = randomizer.nextInt(PlayersDB.size());
+        List<Player> players = new ArrayList(PlayersDB.getAll().values());
+        return newResponse(players.get(i));
+    }
+
+    /**
+     * Add a player into this client's memory
+     * @param playerId
+     */
+    @RequestMapping(method = RequestMethod.POST, path="/players/{playerId}")
+    void addPlayer(@PathVariable String playerId) {
+        if(!StringUtils.isEmpty(playerId)) {
+            PlayersDB.add(playerId);
+        }
+    }
+
+    /**
+     * Remove a player from this client's memory
+     * @param playerId
+     */
+    @RequestMapping(method = RequestMethod.DELETE, path="/players/{playerId}")
+    void removePlayer(@PathVariable String playerId) {
+        if(!StringUtils.isEmpty(playerId)) {
+            PlayersDB.remove(playerId);
+        }
+    }
+
+    @RequestMapping("/players")
+    public Response getPlayers() {
+        return newResponse(PlayersDB.getAll().values());
+    }
+
+    @RequestMapping("/ip")
+    public List<String> getIp() {
+        try {
+            InetAddress ip = InetAddress.getLocalHost();
+            String hostname = ip.getHostName();
+            return new ArrayList<>(Arrays.asList(ip.toString(), hostname));
+        } catch (UnknownHostException ex) {
+            ex.printStackTrace();
         }
 
-        return new Response(player);
+        return Collections.emptyList();
+    }
+
+    // shhhh this is private
+
+    private Response newResponse(Object object) {
+        if(object == null) {
+            return new Response().meta("port", port).meta("ip", getIp());
+        }
+        return new Response(object).meta("port", port).meta("ip", getIp());
     }
 
     private Player lookupPlayer(String id) throws NotFoundException {
@@ -170,7 +255,7 @@ public class PlayerController {
 @ResponseStatus(HttpStatus.NOT_FOUND)
 class NotFoundException extends Exception {
 
-    public NotFoundException(String s) {
+    NotFoundException(String s) {
         super(s);
     }
 }
